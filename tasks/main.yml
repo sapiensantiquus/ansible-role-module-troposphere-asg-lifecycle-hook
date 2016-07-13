@@ -1,0 +1,32 @@
+- name: Create build directory
+  file:
+    state: directory
+    path: "{{ playbook_dir }}/{{ asg_hook_build_dir }}"
+
+- name: Run troposphere to generate template
+  asg_lifecycle_hook:
+    asg_hook_default_result: "{{ asg_hook_default_result | default(omit, true) }}"
+    asg_hook_heartbeat_timeout: "{{ asg_hook_heartbeat_timeout | default(omit, true) }}"
+    asg_hook_notification_metadata: "{{ asg_hook_notification_metadata | default(omit, true) }}"
+  register: result
+
+- name: Write template to file
+  copy:
+    content: "{{ result['Result'] }}"
+    dest: "{{ playbook_dir }}/{{ asg_hook_build_dir }}/{{ asg_hook_template_name }}-raw"
+
+- name: Clean up template
+  shell: "python -m json.tool {{ playbook_dir }}/{{ asg_hook_build_dir }}/{{ asg_hook_template_name }}-raw > {{ playbook_dir }}/{{ asg_hook_build_dir }}/{{ asg_hook_template_name }}"
+
+- name: Create CloudFormation stack
+  cloudformation:
+    stack_name: "{{ asg_hook_stack_name }}"
+    region: "{{ asg_hook_region }}"
+    template: "{{ playbook_dir }}/{{ asg_hook_build_dir }}/{{ asg_hook_template_name }}"
+    template_parameters:
+      ASGName: "{{ asg_hook_asg_name }}"
+      NotificationTargetARN: "{{ asg_hook_notification_target_arn }}"
+      IAMRoleARN: "{{ asg_hook_role_arn }}"
+      LifecycleTransition: "{{ asg_hook_lifecycle_transition }}"
+    security_token: "{{ asg_hook_security_token | default(omit,true) }}"
+    tags: "{{ asg_hook_tags }}"
